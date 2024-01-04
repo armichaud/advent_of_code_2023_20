@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
+type Module = Rc<RefCell<dyn PulseModule>>;
 pub const BROADCASTER: &str = "broadcaster";
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -9,47 +10,47 @@ pub enum Pulse {
 }
 
 pub struct PulseCounter {
-    Low: usize,
-    High: usize
+    pub low: usize,
+    pub high: usize
 }
 
 impl PulseCounter {
     pub fn new() -> Self {
-        PulseCounter { Low: 0, High: 0 }
+        PulseCounter { low: 0, high: 0 }
     }
 
     fn increment(&mut self, pulse: &Pulse) {
         match pulse {
-            Pulse::Low => self.Low += 1,
-            Pulse::High => self.High += 1
+            Pulse::Low => self.low += 1,
+            Pulse::High => self.high += 1
         }
+    }
+
+    pub fn get_product_of_counts(&self) -> usize {
+        self.low * self.high
     }
 }
 
-pub trait Subscribe {
-    fn add_subscriber(&mut self, publisher: &str, subscriber: Box<dyn PulseModule>);
-}
-
 pub struct SubscriptionManager {
-    subscribers: Vec<Box<dyn PulseModule>>
+    subscribers: Vec<Module>
 }
 
 impl SubscriptionManager {
     fn new() -> Self {
         SubscriptionManager { subscribers: Vec::new() }
     }
-}
 
-impl Subscribe for SubscriptionManager {
-    fn add_subscriber(&mut self, publisher: &str, mut subscriber: Box<dyn PulseModule>) {
-        subscriber.register_input(publisher);
+    fn add_subscriber(&mut self, publisher: &str, mut subscriber: Module) {
+        subscriber.borrow_mut().register_input(publisher);
         self.subscribers.push(subscriber);
     }
 }
 
 pub trait PulseModule {
+    fn get_id(&self) -> &str;
     fn notify(&mut self, pulse: &Pulse, sender: &str);
-    fn register_input(&mut self, input: &str) {}
+    fn register_input(&mut self, _: &str) {}
+    fn add_subscriber(&mut self, _: Module) {}
 }
 
 pub struct FlipFlop {
@@ -66,20 +67,22 @@ impl FlipFlop {
 }
 
 impl PulseModule for FlipFlop {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+
     fn notify(&mut self, pulse: &Pulse, _: &str) {
         self.pulse_counter.borrow_mut().increment(pulse);
         if *pulse == Pulse::Low {
             self.on = !self.on;
             let pulse_to_send = if self.on { Pulse::High } else { Pulse::Low };
             for subscriber in &mut self.subscription_manager.subscribers {
-                subscriber.notify(&pulse_to_send, &self.id);
+                subscriber.borrow_mut().notify(&pulse_to_send, &self.id);
             }
         }
     }
-}
 
-impl Subscribe for FlipFlop {
-    fn add_subscriber(&mut self, _: &str, subscriber: Box<dyn PulseModule>) {
+    fn add_subscriber(&mut self, subscriber: Module) {
         self.subscription_manager.add_subscriber(&self.id, subscriber);
     }
 }
@@ -97,13 +100,11 @@ impl Conjunction {
     }
 }
 
-impl Subscribe for Conjunction {
-    fn add_subscriber(&mut self, _: &str, subscriber: Box<dyn PulseModule>) {
-        self.subscription_manager.add_subscriber(&self.id, subscriber);
-    }
-}
-
 impl PulseModule for Conjunction {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+
     fn register_input(&mut self, input: &str) {
         self.input_pulse_cache.insert(input.to_string(), Pulse::Low);
     }
@@ -117,8 +118,12 @@ impl PulseModule for Conjunction {
             Pulse::High
         };
         for subscriber in &mut self.subscription_manager.subscribers {
-            subscriber.notify(&pulse_to_send, &&self.id);
+            subscriber.borrow_mut().notify(&pulse_to_send, &&self.id);
         }
+    }
+
+    fn add_subscriber(&mut self, subscriber: Module) {
+        self.subscription_manager.add_subscriber(&self.id, subscriber);
     }
 }
 
@@ -135,16 +140,39 @@ impl Broadcaster {
 }
 
 impl PulseModule for Broadcaster {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+
     fn notify(&mut self, pulse: &Pulse, sender: &str) {
         self.pulse_counter.borrow_mut().increment(pulse);
         for subscriber in &mut self.subscription_manager.subscribers {
-            subscriber.notify(pulse, sender);
+            subscriber.borrow_mut().notify(pulse, sender);
         }
+    }
+
+    fn add_subscriber(&mut self, subscriber: Module) {
+        self.subscription_manager.add_subscriber(&self.id, subscriber);
     }
 }
 
-impl Subscribe for Broadcaster {
-    fn add_subscriber(&mut self, _: &str, subscriber: Box<dyn PulseModule>) {
-        self.subscription_manager.add_subscriber(&self.id, subscriber);
+pub struct Output {
+    id: String,
+    pulse_counter: Rc<RefCell<PulseCounter>>
+}
+
+impl Output {
+    pub fn new(id: String, pulse_counter: Rc<RefCell<PulseCounter>>) -> Self {
+        Output { id, pulse_counter }
+    }
+}
+
+impl PulseModule for Output {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+
+    fn notify(&mut self, pulse: &Pulse, _: &str) {
+        self.pulse_counter.borrow_mut().increment(pulse);
     }
 }
