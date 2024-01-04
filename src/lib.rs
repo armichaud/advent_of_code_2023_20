@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc, cell::RefCell};
 type Module = Rc<RefCell<dyn PulseModule>>;
 pub const BROADCASTER: &str = "broadcaster";
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Pulse {
     Low,
     High
@@ -13,6 +13,12 @@ pub struct PulseManager {
     pub low: usize,
     pub high: usize,
     pub queue: Vec<(Pulse, String, Module)>
+}
+
+impl std::fmt::Debug for PulseManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PulseManager").finish()
+    }
 }
 
 impl PulseManager {
@@ -46,8 +52,18 @@ impl PulseManager {
     }
 }
 
+
 pub struct SubscriptionManager {
     subscribers: Vec<Module>
+}
+
+impl std::fmt::Debug for SubscriptionManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SubscriptionManager")
+            .field("subscriber count", &self.subscribers.len())
+            .field("subscriber ids", &self.subscribers.iter().map(|subscriber| subscriber.borrow().get_id().to_owned()).collect::<Vec<String>>())
+            .finish()
+    }
 }
 
 impl SubscriptionManager {
@@ -71,8 +87,19 @@ pub trait PulseModule {
     fn register_input(&mut self, _: &str) {}
     fn add_subscriber(&mut self, subscriber: Module);
     fn update_queue(&mut self, pulse: &Pulse);
+    fn get_subscription_manager(&self) -> Option<&SubscriptionManager>;
 }
 
+impl std::fmt::Debug for dyn PulseModule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PulseModule")
+            .field("id", &self.get_id())
+            .field("subscriptions", &self.get_subscription_manager().unwrap_or(&SubscriptionManager::new()))
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct FlipFlop {
     id: String,
     on: bool,
@@ -89,6 +116,10 @@ impl FlipFlop {
 impl PulseModule for FlipFlop {
     fn get_id(&self) -> &str {
         &self.id
+    }
+
+    fn get_subscription_manager(&self) -> Option<&SubscriptionManager> {
+        Some(&self.subscription_manager)
     }
 
     fn notify(&mut self, pulse: &Pulse, _: &str) {
@@ -136,6 +167,10 @@ impl PulseModule for Conjunction {
         &self.id
     }
 
+    fn get_subscription_manager(&self) -> Option<&SubscriptionManager> {
+        Some(&self.subscription_manager)
+    }
+
     fn register_input(&mut self, input: &str) {
         self.input_pulse_cache.insert(input.to_string(), Pulse::Low);
     }
@@ -181,6 +216,10 @@ impl PulseModule for Broadcaster {
         &self.id
     }
 
+    fn get_subscription_manager(&self) -> Option<&SubscriptionManager> {
+        Some(&self.subscription_manager)
+    }
+
     fn notify(&mut self, pulse: &Pulse, _: &str) {
         self.pulse_manager.borrow_mut().increment(pulse);
         self.update_queue(pulse);
@@ -221,4 +260,5 @@ impl PulseModule for Output {
 
     fn add_subscriber(&mut self, _: Module) {}
     fn update_queue(&mut self, _: &Pulse) {}
+    fn get_subscription_manager(&self) -> Option<&SubscriptionManager> { None }
 }

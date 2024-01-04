@@ -39,21 +39,24 @@ fn solution(file: &str) -> usize {
     }
     for publisher in module_map.values() {
         let mut publisher = publisher.borrow_mut();
-        for subscriber_id in publisher_map.get(publisher.get_id()).unwrap().iter() {
-            let subscriber = module_map.get(subscriber_id).unwrap();
-            publisher.add_subscriber(Rc::clone(&subscriber));
+        if let Some(subscribers) = publisher_map.get(publisher.get_id()) {
+            for subscriber_id in subscribers {
+                let subscriber = module_map.get(subscriber_id).unwrap();
+                publisher.add_subscriber(Rc::clone(&subscriber));
+            }
         }
     }
     for _ in 0..100 {
         pulse_manager.borrow_mut().run(Rc::clone(&broadcaster));
     }
+    //println!("{:?}", module_map);
     let final_counts: &RefCell<PulseManager> = pulse_manager.borrow();
     let final_counts = final_counts.borrow();
     final_counts.get_product_of_counts()
 }
 
 fn main() {
-    assert_eq!(solution("example_1.txt"), 32000000);
+    assert_eq!(solution("example_2.txt"), 32000000);
     assert_eq!(solution("example_2.txt"), 11687500);
     assert_eq!(solution("input.txt"), 0);
 }
