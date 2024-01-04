@@ -40,9 +40,15 @@ impl SubscriptionManager {
         SubscriptionManager { subscribers: Vec::new() }
     }
 
-    fn add_subscriber(&mut self, publisher: &str, mut subscriber: Module) {
+    fn add_subscriber(&mut self, publisher: &str, subscriber: Module) {
         subscriber.borrow_mut().register_input(publisher);
         self.subscribers.push(subscriber);
+    }
+
+    fn notify_all(&mut self, pulse: Pulse, sender: &str) {
+        for subscriber in &mut self.subscribers {
+            subscriber.borrow_mut().notify(&pulse, sender);
+        }
     }
 }
 
@@ -75,10 +81,7 @@ impl PulseModule for FlipFlop {
         self.pulse_counter.borrow_mut().increment(pulse);
         if *pulse == Pulse::Low {
             self.on = !self.on;
-            let pulse_to_send = if self.on { Pulse::High } else { Pulse::Low };
-            for subscriber in &mut self.subscription_manager.subscribers {
-                subscriber.borrow_mut().notify(&pulse_to_send, &self.id);
-            }
+            self.subscription_manager.notify_all(if self.on { Pulse::High } else { Pulse::Low }, &self.id);
         }
     }
 
