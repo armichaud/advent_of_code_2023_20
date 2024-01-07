@@ -43,6 +43,7 @@ impl PulseManager {
     }
 
     fn run_once(&mut self, modules: &mut HashMap<String, PulseModule>) {
+        self.increment(PulseLevel::Low);
         self.send(Pulse {
             level: PulseLevel::Low,
             source: BROADCASTER.to_string()
@@ -122,9 +123,9 @@ impl PulseModule {
 
     fn conjunction_output(&self) -> PulseLevel {
         return if self.input_memory.values().all(|&x| x == PulseLevel::High) {
-            PulseLevel::High
-        } else {
             PulseLevel::Low
+        } else {
+            PulseLevel::High
         }
     }
 
@@ -202,6 +203,6 @@ fn solution(file: &str) -> usize {
 
 fn main() {
     assert_eq!(solution("example_1.txt"), 32000000);
-    // assert_eq!(solution("example_2.txt"), 11687500);
+    assert_eq!(solution("example_2.txt"), 11687500);
     //assert_eq!(solution("input.txt"), 0);
 }
