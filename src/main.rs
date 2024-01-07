@@ -32,8 +32,8 @@ impl PulseManager {
         }
     }
 
-    fn get_suscribers(&self, source: &str) -> Vec<String> {
-        self.subscriptions.get(source).unwrap().clone()
+    fn get_subscribers(&self, source: &str) -> Vec<String> {
+        self.subscriptions.get(source).unwrap_or(&Vec::<String>::new()).clone()
     }
 
     fn run(&mut self, modules: &mut HashMap<String, PulseModule>, n: usize) {
@@ -193,7 +193,7 @@ fn solution(file: &str) -> usize {
         .map(|x| x.to_owned())
         .collect::<Vec<String>>();
     for id in complete_module_list {
-        manager.get_suscribers(id.as_str()).iter().for_each(|subscriber| {
+        manager.get_subscribers(id.as_str()).iter().for_each(|subscriber| {
             modules.get_mut(subscriber).unwrap().input_memory.insert(id.clone(), PulseLevel::Low);
         })   
     }
@@ -204,5 +204,5 @@ fn solution(file: &str) -> usize {
 fn main() {
     assert_eq!(solution("example_1.txt"), 32000000);
     assert_eq!(solution("example_2.txt"), 11687500);
-    //assert_eq!(solution("input.txt"), 0);
+    assert_eq!(solution("input.txt"), 0);
 }
