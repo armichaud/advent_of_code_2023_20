@@ -38,11 +38,22 @@ impl PulseManager {
 
     fn run(&mut self, modules: &mut HashMap<String, PulseModule>, n: usize) {
         for _ in 0..n {
-            self.run_once(modules);
+            self.run_once(modules, false);
         }
     }
 
-    fn run_once(&mut self, modules: &mut HashMap<String, PulseModule>) {
+    fn rx(&mut self, modules: &mut HashMap<String, PulseModule>) -> usize {
+        let mut i = 0;
+        loop {
+            i += 1;
+            if let Some(_) = self.run_once(modules, true) {
+                break;
+            }
+        }
+        i
+    }
+
+    fn run_once(&mut self, modules: &mut HashMap<String, PulseModule>, rx: bool) -> Option<()> {
         self.increment(PulseLevel::Low);
         self.send(Pulse {
             level: PulseLevel::Low,
@@ -54,11 +65,15 @@ impl PulseManager {
             for subscriber in subscribers {
                 self.increment(pulse.level);
                 let module = modules.get_mut(&subscriber).unwrap();
+                if rx && module.id == "rx" && pulse.level == PulseLevel::Low {
+                    return Some(());
+                }
                 if let Some(next_pulse) = module.receive(pulse.clone()) {
                     self.send(next_pulse);
                 }
             }
         }
+        None
     }
 
     fn send(&mut self, pulse: Pulse) {
@@ -158,13 +173,12 @@ impl PulseModule {
     }
 } 
 
-fn solution(file: &str) -> usize {
+fn parse_input(file: &str) -> (PulseManager, HashMap<String, PulseModule>) {
+    let file = File::open(file).unwrap();
+    let lines = BufReader::new(file).lines();
     let mut manager = PulseManager::new();
     let mut modules: HashMap<String, PulseModule> = HashMap::new();
 
-    // Parse input
-    let file = File::open(file).unwrap();
-    let lines = BufReader::new(file).lines();
     let mut complete_module_list = HashSet::<String>::new();
     for line in lines {
         let line = line.unwrap();
@@ -197,12 +211,23 @@ fn solution(file: &str) -> usize {
             modules.get_mut(subscriber).unwrap().input_memory.insert(id.clone(), PulseLevel::Low);
         })   
     }
+    (manager, modules)
+}
+
+fn part_1(file: &str) -> usize {
+    let (mut manager, mut modules) = parse_input(file);
     manager.run(&mut modules, 1000);
     manager.pulse_products()
 }
 
+fn part_2(file: &str) -> usize {
+    let (mut manager, mut modules) = parse_input(file);
+    manager.rx(&mut modules)
+}
+
 fn main() {
-    assert_eq!(solution("example_1.txt"), 32000000);
-    assert_eq!(solution("example_2.txt"), 11687500);
-    assert_eq!(solution("input.txt"), 0);
+    assert_eq!(part_1("example_1.txt"), 32000000);
+    assert_eq!(part_1("example_2.txt"), 11687500);
+    assert_eq!(part_1("input.txt"), 806332748);
+    assert_eq!(part_2("input.txt"), 0);
 }
